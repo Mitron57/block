@@ -1,0 +1,11 @@
+backend/target/
+backend/server/fuzz/target/
+target/
+frontend/node_modules/
+frontend/dist/
+target/
+.env
+.env.production
+*.log
+
+

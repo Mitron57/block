@@ -1,0 +1,44 @@
+[package]
+name = "board_server"
+version = "0.1.0"
+edition = "2024"
+default-run = "board_server"
+
+[[bin]]
+name = "board_server"
+path = "src/main.rs"
+
+[[bin]]
+name = "seed"
+path = "src/bin/seed.rs"
+
+[lib]
+name = "board_server"
+path = "src/lib.rs"
+
+[dependencies]
+axum = { version = "0.8", features = ["macros", "ws"] }
+axum-extra = { version = "0.10", features = ["typed-header"] }
+tokio = { version = "1", features = ["full"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "migrate", "uuid", "chrono", "json"] }
+uuid = { version = "1", features = ["serde", "v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+argon2 = "0.5"
+jsonwebtoken = "9"
+futures = "0.3"
+async-trait = "0.1"
+headers = "0.4"
+rand_core = { version = "0.6", features = ["getrandom"] }
+anyhow = "1"
+
+[dev-dependencies]
+reqwest = { version = "0.12", features = ["json"] }
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
