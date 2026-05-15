@@ -1,0 +1,56 @@
+# frontend — сборка SPA + nginx (только файлы)
+# board-api — Rust API
+# nginx — edge-прокси (/api → API, / → frontend)
+#
+# Пересобрать UI:  podman compose build frontend && podman compose up -d frontend nginx
+# Только прокси:   podman compose build nginx && podman compose up -d nginx
+# Только API:      podman compose build board-api && podman compose up -d board-api
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: board
+      POSTGRES_PASSWORD: board
+      POSTGRES_DB: board
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U board -d board"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  board-api:
+    build:
+      context: ./backend
+      dockerfile: server/Dockerfile
+    environment:
+      DATABASE_URL: postgres://board:board@db:5432/board
+      JWT_SECRET: dev-secret-change-me-in-production-min-16-chars
+      FRONTEND_ORIGIN: http://localhost:5173
+      HOST: 0.0.0.0
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: static
+    expose:
+      - "80"
+
+  nginx:
+    build:
+      context: ./proxy
+      dockerfile: Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      - board-api
+      - frontend
