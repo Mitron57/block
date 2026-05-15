@@ -1,0 +1,22 @@
+[package]
+name = "board_server-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+board_server = { path = ".." }
+libfuzzer-sys = "0.4"
+
+[[bin]]
+name = "ws_message"
+path = "fuzz_targets/ws_message.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]
