@@ -120,4 +120,4 @@ cargo +nightly fuzz run ws_message -- -runs=1000
 
 ## CI/CD (GitHub Actions)
 
-Workflow [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml): тесты на PR, на `main` — деплой в Railway (`railway up --service …`). Секрет в GitHub: `RAILWAY_TOKEN` (**project token** для нужного environment: Project Settings → Tokens).
+Workflow [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml): тесты на PR; на `main` — `railway up` для `board-api` и `frontend`. Сервис **proxy** деплоится автоматически через **Railway → GitHub** (root directory `proxy/`). Секрет: `RAILWAY_TOKEN` (project token).

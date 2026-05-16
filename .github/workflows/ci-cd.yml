@@ -96,6 +96,5 @@ jobs:
         working-directory: frontend
         run: railway up --detach --ci --service frontend
 
-      - name: Deploy proxy
-        working-directory: proxy
-        run: railway up --detach --ci --service proxy
+      # proxy: деплой только через Railway GitHub integration (root: proxy/),
+      # не railway up — CLI не передаёт контекст репозитория (railway.toml).
