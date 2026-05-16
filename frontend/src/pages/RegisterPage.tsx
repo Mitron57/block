@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api'
-import { useAuth } from '../auth'
+import { useAuth } from '../useAuth'
 
 export function RegisterPage() {
   const nav = useNavigate()

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
-import { useAuth } from '../auth'
+import { useAuth } from '../useAuth'
 import type { Board } from '../types'
 
 export function BoardsPage() {

@@ -124,15 +124,22 @@ export function BoardPage() {
   useEffect(() => {
     const token = getToken()
     if (!token) return
+    let active = true
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const u = new URL(`/api/boards/${boardId}/ws`, window.location.origin)
     u.protocol = proto
     u.searchParams.set('token', token)
-    setWsState('connecting')
+    queueMicrotask(() => {
+      if (active) setWsState('connecting')
+    })
     const ws = new WebSocket(u.toString())
     wsRef.current = ws
-    ws.onopen = () => setWsState('open')
-    ws.onclose = () => setWsState('closed')
+    ws.onopen = () => {
+      if (active) setWsState('open')
+    }
+    ws.onclose = () => {
+      if (active) setWsState('closed')
+    }
     ws.onmessage = (ev) => {
       try {
         const msg = JSON.parse(String(ev.data)) as ServerWsMessage
@@ -155,7 +162,12 @@ export function BoardPage() {
         }
       } catch { /* ignore */ }
     }
-    return () => { ws.close(); wsRef.current = null }
+    return () => {
+      active = false
+      ws.close()
+      wsRef.current = null
+      setWsState('closed')
+    }
   }, [boardId])
 
   // full redraw when elements change (no preview during idle)

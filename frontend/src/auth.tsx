@@ -1,19 +1,6 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { setToken as persistToken, getToken } from './api'
-
-type AuthCtx = {
-  token: string | null
-  setToken: (t: string | null) => void
-}
-
-const Ctx = createContext<AuthCtx | null>(null)
+import { AuthContext } from './auth-context'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setTok] = useState<string | null>(() => getToken())
@@ -22,11 +9,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTok(t)
   }, [])
   const v = useMemo(() => ({ token, setToken }), [token, setToken])
-  return <Ctx.Provider value={v}>{children}</Ctx.Provider>
-}
-
-export function useAuth() {
-  const c = useContext(Ctx)
-  if (!c) throw new Error('useAuth outside provider')
-  return c
+  return <AuthContext.Provider value={v}>{children}</AuthContext.Provider>
 }
