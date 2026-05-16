@@ -113,12 +113,14 @@ commit_at "2026-05-15 20:06:00 +0300" "refactor(infra): separate static nginx an
   proxy/nginx.conf
 
 # 2026-05-16 (пт) — 2 коммита
-commit_at "2026-05-16 11:45:00 +0300" "build: production compose and yandex deploy script" \
-  docker-compose.prod.yml \
+commit_at "2026-05-16 11:45:00 +0300" "build: railway config and production env example" \
   .env.production.example \
-  scripts/deploy-remote.sh
+  backend/railway.toml \
+  frontend/railway.toml \
+  proxy/railway.toml \
+  scripts/railway-seed.sh
 
-commit_at "2026-05-16 15:30:00 +0300" "ci: github actions test and deploy to yandex cloud" \
+commit_at "2026-05-16 15:30:00 +0300" "ci: github actions test and deploy to railway" \
   .github/workflows/ci-cd.yml \
   rust-toolchain.toml \
   scripts/build-git-history.sh

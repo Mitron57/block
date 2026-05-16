@@ -1,14 +1,15 @@
 # Edge-прокси: /api → board-api, остальное → frontend (статика).
+# Переменные подставляются в docker-entrypoint.sh (Docker Compose / Railway).
 upstream board_frontend {
-    server frontend:80;
+    server ${FRONTEND_HOST};
 }
 
 upstream board_api {
-    server board-api:3000;
+    server ${BOARD_API_HOST};
 }
 
 server {
-    listen 80;
+    listen ${PORT};
     server_name _;
 
     location /api/ {

@@ -6,6 +6,7 @@ frontend/dist/
 target/
 .env
 .env.production
+.railway/
 *.log
 
 

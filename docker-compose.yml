@@ -49,6 +49,10 @@ services:
     build:
       context: ./proxy
       dockerfile: Dockerfile
+    environment:
+      BOARD_API_HOST: board-api:3000
+      FRONTEND_HOST: frontend:80
+      PORT: "80"
     ports:
       - "5173:80"
     depends_on:

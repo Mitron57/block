@@ -1,0 +1,7 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+watchPatterns = ["src/**", "index.html", "package.json", "package-lock.json", "vite.config.ts", "nginx.static.conf"]
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
