@@ -1,0 +1,169 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: cr.yandex
+
+jobs:
+  backend-tests:
+    name: Backend (Rust)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/server
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: board
+          POSTGRES_PASSWORD: board
+          POSTGRES_DB: board
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U board -d board"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://board:board@localhost:5432/board
+      JWT_SECRET: integration-test-secret-32chars!!
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache: true
+          cache-workspaces: backend
+
+      - name: Unit tests
+        run: cargo test --lib
+
+      - name: Integration tests (roles)
+        run: cargo test --test role_access -- --include-ignored
+
+  frontend-tests:
+    name: Frontend (React)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm run lint
+
+  publish-images:
+    name: Build & push images (YCR)
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Image tag
+        id: meta
+        run: echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to Yandex Container Registry
+        uses: yc-actions/yc-cr-login@v2
+        with:
+          yc-sa-json-credentials: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
+
+      - name: Build and push board-api
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ secrets.YC_REGISTRY_ID }}/board-api:${{ steps.meta.outputs.tag }}
+        run: |
+          docker build -f backend/server/Dockerfile -t "$IMAGE" -t "${IMAGE%:*}:latest" ./backend
+          docker push "$IMAGE"
+          docker push "${IMAGE%:*}:latest"
+
+      - name: Build and push board-frontend
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ secrets.YC_REGISTRY_ID }}/board-frontend:${{ steps.meta.outputs.tag }}
+        run: |
+          docker build -f frontend/Dockerfile --target static -t "$IMAGE" -t "${IMAGE%:*}:latest" ./frontend
+          docker push "$IMAGE"
+          docker push "${IMAGE%:*}:latest"
+
+      - name: Build and push board-proxy
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ secrets.YC_REGISTRY_ID }}/board-proxy:${{ steps.meta.outputs.tag }}
+        run: |
+          docker build -f proxy/Dockerfile -t "$IMAGE" -t "${IMAGE%:*}:latest" ./proxy
+          docker push "$IMAGE"
+          docker push "${IMAGE%:*}:latest"
+
+  deploy:
+    name: Deploy to Yandex Cloud VM
+    runs-on: ubuntu-latest
+    needs: [publish-images]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare deploy bundle
+        run: |
+          mkdir -p .deploy-bundle/scripts
+          cp docker-compose.prod.yml .deploy-bundle/
+          cp scripts/deploy-remote.sh .deploy-bundle/scripts/
+
+      - name: Sync files to VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          source: ".deploy-bundle/docker-compose.prod.yml,.deploy-bundle/scripts/deploy-remote.sh"
+          target: /tmp/board-deploy
+          strip_components: 1
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          CR_IMAGE_API: ${{ env.REGISTRY }}/${{ secrets.YC_REGISTRY_ID }}/board-api:${{ needs.publish-images.outputs.image_tag }}
+          CR_IMAGE_FRONTEND: ${{ env.REGISTRY }}/${{ secrets.YC_REGISTRY_ID }}/board-frontend:${{ needs.publish-images.outputs.image_tag }}
+          CR_IMAGE_PROXY: ${{ env.REGISTRY }}/${{ secrets.YC_REGISTRY_ID }}/board-proxy:${{ needs.publish-images.outputs.image_tag }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          FRONTEND_ORIGIN: ${{ secrets.FRONTEND_ORIGIN }}
+          YC_SA_JSON_CREDENTIALS: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          envs: CR_IMAGE_API,CR_IMAGE_FRONTEND,CR_IMAGE_PROXY,DATABASE_URL,JWT_SECRET,FRONTEND_ORIGIN,YC_SA_JSON_CREDENTIALS
+          script: |
+            set -euo pipefail
+            DEPLOY_PATH="${{ secrets.VM_DEPLOY_PATH }}"
+            if [ -z "$DEPLOY_PATH" ]; then DEPLOY_PATH="$HOME/block"; fi
+            mkdir -p "$DEPLOY_PATH/scripts"
+            cp /tmp/board-deploy/docker-compose.prod.yml "$DEPLOY_PATH/"
+            cp /tmp/board-deploy/scripts/deploy-remote.sh "$DEPLOY_PATH/scripts/"
+            chmod +x "$DEPLOY_PATH/scripts/deploy-remote.sh"
+            cd "$DEPLOY_PATH"
+            echo "$YC_SA_JSON_CREDENTIALS" | docker login --username json_key --password-stdin cr.yandex
+            export CR_IMAGE_API CR_IMAGE_FRONTEND CR_IMAGE_PROXY DATABASE_URL JWT_SECRET FRONTEND_ORIGIN
+            export VM_DEPLOY_PATH="$DEPLOY_PATH"
+            ./scripts/deploy-remote.sh
