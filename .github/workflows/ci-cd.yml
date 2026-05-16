@@ -74,6 +74,9 @@ jobs:
     needs: [backend-tests, frontend-tests]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     environment: production
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -82,28 +85,28 @@ jobs:
           node-version: "22"
 
       - name: Install Railway CLI
-        run: npm install -g @railway/cli
+        run: npm install -g @railway/cli@4.58.0
 
       - name: Deploy board-api
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         working-directory: backend
         run: |
-          railway link -p "${{ secrets.RAILWAY_PROJECT_ID }}" -e production -s board-api
-          railway up --detach
+          railway up --detach --ci \
+            --project "$RAILWAY_PROJECT_ID" \
+            --environment production \
+            --service board-api
 
       - name: Deploy frontend
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         working-directory: frontend
         run: |
-          railway link -p "${{ secrets.RAILWAY_PROJECT_ID }}" -e production -s frontend
-          railway up --detach
+          railway up --detach --ci \
+            --project "$RAILWAY_PROJECT_ID" \
+            --environment production \
+            --service frontend
 
       - name: Deploy proxy
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         working-directory: proxy
         run: |
-          railway link -p "${{ secrets.RAILWAY_PROJECT_ID }}" -e production -s proxy
-          railway up --detach
+          railway up --detach --ci \
+            --project "$RAILWAY_PROJECT_ID" \
+            --environment production \
+            --service proxy
