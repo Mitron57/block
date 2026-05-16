@@ -75,8 +75,9 @@ jobs:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     environment: production
     env:
+      # Project token (Project Settings → Tokens). Уже привязан к project + environment.
+      # Не передавать --project/--environment — см. https://docs.railway.com/cli/deploying
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -89,24 +90,12 @@ jobs:
 
       - name: Deploy board-api
         working-directory: backend
-        run: |
-          railway up --detach --ci \
-            --project "$RAILWAY_PROJECT_ID" \
-            --environment production \
-            --service board-api
+        run: railway up --detach --ci --service board-api
 
       - name: Deploy frontend
         working-directory: frontend
-        run: |
-          railway up --detach --ci \
-            --project "$RAILWAY_PROJECT_ID" \
-            --environment production \
-            --service frontend
+        run: railway up --detach --ci --service frontend
 
       - name: Deploy proxy
         working-directory: proxy
-        run: |
-          railway up --detach --ci \
-            --project "$RAILWAY_PROJECT_ID" \
-            --environment production \
-            --service proxy
+        run: railway up --detach --ci --service proxy
