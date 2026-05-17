@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test_support;
+
 pub mod application;
 pub mod config;
 pub mod domain;

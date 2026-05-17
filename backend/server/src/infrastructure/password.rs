@@ -17,3 +17,20 @@ pub fn verify_password(password: &str, hash: &str) -> bool {
         .verify_password(password.as_bytes(), &parsed)
         .is_ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{hash_password, verify_password};
+
+    #[test]
+    fn hash_and_verify_roundtrip() {
+        let hash = hash_password("password123").unwrap();
+        assert!(verify_password("password123", &hash));
+        assert!(!verify_password("wrong", &hash));
+    }
+
+    #[test]
+    fn verify_rejects_garbage_hash() {
+        assert!(!verify_password("password123", "not-a-valid-phc-string"));
+    }
+}

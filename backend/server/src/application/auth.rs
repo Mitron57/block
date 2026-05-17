@@ -73,3 +73,103 @@ pub struct UserDto {
     pub email: String,
     pub display_name: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use crate::domain::repository::UserRepository;
+    use crate::domain::DomainError;
+    use crate::infrastructure::{password, JwtConfig};
+    use crate::test_support::FakeUserRepo;
+
+    use super::AuthService;
+
+    fn service() -> AuthService {
+        AuthService::new(
+            Arc::new(FakeUserRepo::new()),
+            JwtConfig::new("test-secret-32-characters-minimum!!", 24),
+        )
+    }
+
+    #[tokio::test]
+    async fn register_rejects_short_password() {
+        let svc = service();
+        let err = svc
+            .register("a@b.com", "short", "Alice")
+            .await
+            .unwrap_err();
+        assert!(matches!(err, DomainError::InvalidInput(_)));
+    }
+
+    #[tokio::test]
+    async fn register_login_and_verify_token() {
+        let svc = service();
+        let (id, token) = svc
+            .register("alice@example.com", "password123", "Alice")
+            .await
+            .unwrap();
+        assert_eq!(svc.verify_token(&token).unwrap(), id);
+
+        let (id2, token2) = svc
+            .login("alice@example.com", "password123")
+            .await
+            .unwrap();
+        assert_eq!(id, id2);
+        assert_eq!(svc.verify_token(&token2).unwrap(), id);
+
+        let me = svc.me(id).await.unwrap();
+        assert_eq!(me.email, "alice@example.com");
+    }
+
+    #[tokio::test]
+    async fn login_rejects_wrong_password() {
+        let svc = service();
+        svc.register("alice@example.com", "password123", "Alice")
+            .await
+            .unwrap();
+        let err = svc
+            .login("alice@example.com", "wrong-password")
+            .await
+            .unwrap_err();
+        assert!(matches!(err, DomainError::Forbidden));
+    }
+
+    #[tokio::test]
+    async fn login_unknown_email_not_found() {
+        let svc = service();
+        let err = svc
+            .login("nobody@example.com", "password123")
+            .await
+            .unwrap_err();
+        assert!(matches!(err, DomainError::NotFound));
+    }
+
+    #[tokio::test]
+    async fn verify_token_rejects_invalid() {
+        let svc = service();
+        assert!(matches!(
+            svc.verify_token("invalid"),
+            Err(DomainError::InvalidInput(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn password_hash_used_on_register() {
+        let users = Arc::new(FakeUserRepo::new());
+        let svc = AuthService::new(
+            users.clone(),
+            JwtConfig::new("test-secret-32-characters-minimum!!", 24),
+        );
+        svc.register("bob@example.com", "password123", "Bob")
+            .await
+            .unwrap();
+        let stored = users
+            .find_by_email("bob@example.com")
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(password::verify_password("password123", &stored.password_hash));
+        assert!(!password::verify_password("other", &stored.password_hash));
+    }
+}

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, getToken } from '../api'
 import { hitTestElement } from '../boardHitTest'
@@ -12,6 +12,14 @@ const COLORS = [
   '#f97316', '#a855f7', '#eab308', '#06b6d4',
 ]
 const STROKE_WIDTHS = [2, 4, 8]
+
+const ASSIGNABLE_ROLES: BoardRole[] = ['editor', 'viewer']
+
+const ROLE_LABELS: Record<BoardRole, string> = {
+  owner: 'владелец',
+  editor: 'редактор',
+  viewer: 'наблюдатель',
+}
 
 function drawElement(ctx: CanvasRenderingContext2D, el: BoardElement) {
   const color = (el.payload.color as string) || '#1a1a1a'
@@ -91,6 +99,9 @@ export function BoardPage() {
   const [tool, setTool] = useState<Tool>('pen')
   const [color, setColor] = useState(COLORS[0])
   const [strokeWidth, setStrokeWidth] = useState(STROKE_WIDTHS[0])
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState<BoardRole>('editor')
+  const [memberErr, setMemberErr] = useState<string | null>(null)
 
   // drawing state
   const drawingRef = useRef(false)
@@ -122,6 +133,83 @@ export function BoardPage() {
 
   const canEdit = role === 'owner' || role === 'editor'
   const isOwner = role === 'owner'
+  const canManageMembers = isOwner
+
+  const invalidateMembers = () => qc.invalidateQueries({ queryKey: ['members', boardId] })
+
+  const addMember = useMutation({
+    mutationFn: ({ email, role }: { email: string; role: BoardRole }) =>
+      api<void>(`/api/boards/${boardId}/members`, {
+        method: 'POST',
+        body: JSON.stringify({ email, role }),
+      }),
+    onSuccess: () => {
+      setMemberErr(null)
+      invalidateMembers()
+    },
+  })
+
+  const setMemberRole = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: BoardRole }) =>
+      api<void>(`/api/boards/${boardId}/members/${userId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role }),
+      }),
+    onSuccess: () => {
+      setMemberErr(null)
+      invalidateMembers()
+    },
+  })
+
+  const removeMember = useMutation({
+    mutationFn: (userId: string) =>
+      api<void>(`/api/boards/${boardId}/members/${userId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      setMemberErr(null)
+      invalidateMembers()
+    },
+  })
+
+  const membersBusy =
+    addMember.isPending || setMemberRole.isPending || removeMember.isPending
+
+  async function onInviteMember(e: FormEvent) {
+    e.preventDefault()
+    if (!canManageMembers) return
+    const email = inviteEmail.trim()
+    if (!email) {
+      setMemberErr('Введите email пользователя')
+      return
+    }
+    setMemberErr(null)
+    try {
+      await addMember.mutateAsync({ email, role: inviteRole })
+      setInviteEmail('')
+    } catch (err) {
+      setMemberErr(err instanceof Error ? err.message : 'Не удалось добавить участника')
+    }
+  }
+
+  async function onChangeMemberRole(userId: string, newRole: BoardRole) {
+    if (!canManageMembers || !ASSIGNABLE_ROLES.includes(newRole)) return
+    setMemberErr(null)
+    try {
+      await setMemberRole.mutateAsync({ userId, role: newRole })
+    } catch (err) {
+      setMemberErr(err instanceof Error ? err.message : 'Не удалось изменить роль')
+    }
+  }
+
+  async function onRemoveMember(m: Member) {
+    if (!canManageMembers || m.role === 'owner') return
+    if (!window.confirm(`Исключить ${m.display_name} с доски?`)) return
+    setMemberErr(null)
+    try {
+      await removeMember.mutateAsync(m.user_id)
+    } catch (err) {
+      setMemberErr(err instanceof Error ? err.message : 'Не удалось удалить участника')
+    }
+  }
 
   const deleteBoard = useMutation({
     mutationFn: () => api<void>(`/api/boards/${boardId}`, { method: 'DELETE' }),
@@ -464,11 +552,73 @@ export function BoardPage() {
 
       <aside className="members-panel">
         <h3>Участники</h3>
-        <ul>
+        {canManageMembers && (
+          <form className="member-invite" onSubmit={onInviteMember}>
+            <input
+              type="email"
+              placeholder="email@example.com"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              disabled={membersBusy}
+              required
+            />
+            <div className="member-invite-row">
+              <select
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value as BoardRole)}
+                disabled={membersBusy}
+              >
+                {ASSIGNABLE_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_LABELS[r]}
+                  </option>
+                ))}
+              </select>
+              <button type="submit" className="btn-primary btn-sm" disabled={membersBusy}>
+                Добавить
+              </button>
+            </div>
+          </form>
+        )}
+        {memberErr && <p className="error member-error">{memberErr}</p>}
+        <ul className="member-list">
           {members?.map((m) => (
-            <li key={m.user_id}>
-              <span className="member-name">{m.display_name}</span>
-              <span className={`role-badge role-${m.role}`}>{m.role}</span>
+            <li key={m.user_id} className="member-row">
+              <div className="member-info">
+                <span className="member-name">{m.display_name}</span>
+                <span className="member-email">{m.email}</span>
+              </div>
+              <div className="member-actions">
+                {canManageMembers && m.role !== 'owner' ? (
+                  <>
+                    <select
+                      className="role-select"
+                      value={m.role}
+                      disabled={membersBusy}
+                      onChange={(e) =>
+                        void onChangeMemberRole(m.user_id, e.target.value as BoardRole)
+                      }
+                    >
+                      {ASSIGNABLE_ROLES.map((r) => (
+                        <option key={r} value={r}>
+                          {ROLE_LABELS[r]}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="btn-danger btn-sm"
+                      disabled={membersBusy}
+                      title="Исключить"
+                      onClick={() => void onRemoveMember(m)}
+                    >
+                      ×
+                    </button>
+                  </>
+                ) : (
+                  <span className={`role-badge role-${m.role}`}>{ROLE_LABELS[m.role]}</span>
+                )}
+              </div>
             </li>
           ))}
         </ul>

@@ -1,5 +1,7 @@
 backend/target/
 backend/server/fuzz/target/
+backend/server/fuzz/corpus/
+backend/server/fuzz/artifacts/
 target/
 frontend/node_modules/
 frontend/dist/
@@ -8,5 +10,6 @@ target/
 .env.production
 .railway/
 *.log
+.githooks
 
 

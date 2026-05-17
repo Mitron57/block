@@ -49,3 +49,34 @@ struct Claims {
     sub: String,
     exp: usize,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    #[test]
+    fn sign_and_verify_roundtrip() {
+        let jwt = JwtConfig::new("unit-test-secret-at-least-32-bytes!!", 1);
+        let user_id = Uuid::new_v4();
+        let token = jwt.sign(user_id).unwrap();
+        assert_eq!(jwt.verify(&token).unwrap(), user_id);
+    }
+
+    #[test]
+    fn verify_rejects_wrong_secret() {
+        let a = JwtConfig::new("secret-a-secret-a-secret-a-secret-a!!", 1);
+        let b = JwtConfig::new("secret-b-secret-b-secret-b-secret-b!!", 1);
+        let token = a.sign(Uuid::new_v4()).unwrap();
+        assert!(matches!(b.verify(&token), Err(DomainError::InvalidInput(_))));
+    }
+
+    #[test]
+    fn verify_rejects_malformed_token() {
+        let jwt = JwtConfig::new("unit-test-secret-at-least-32-bytes!!", 1);
+        assert!(matches!(
+            jwt.verify("not.a.jwt"),
+            Err(DomainError::InvalidInput(_))
+        ));
+    }
+}

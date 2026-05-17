@@ -234,3 +234,170 @@ pub struct CreateElementBody {
     #[serde(default)]
     pub z_index: i32,
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use crate::domain::repository::BoardRepository;
+    use crate::domain::{BoardRole, DomainError};
+    use crate::test_support::{FakeBoardRepo, FakeUserRepo};
+
+    use super::BoardService;
+
+    struct Fixture {
+        boards: Arc<FakeBoardRepo>,
+        users: Arc<FakeUserRepo>,
+        svc: BoardService,
+        owner_id: uuid::Uuid,
+        viewer_id: uuid::Uuid,
+        board_id: uuid::Uuid,
+    }
+
+    async fn fixture() -> Fixture {
+        let boards = Arc::new(FakeBoardRepo::new());
+        let users = Arc::new(FakeUserRepo::new());
+        let owner = users.insert("owner@example.com", "Owner");
+        let viewer = users.insert("viewer@example.com", "Viewer");
+        let svc = BoardService::new(boards.clone(), users.clone());
+        let board = svc.create_board(owner.id, "Test board").await.unwrap();
+        boards
+            .upsert_member(board.id, viewer.id, BoardRole::Viewer)
+            .await
+            .unwrap();
+        Fixture {
+            boards,
+            users,
+            svc,
+            owner_id: owner.id,
+            viewer_id: viewer.id,
+            board_id: board.id,
+        }
+    }
+
+    #[tokio::test]
+    async fn create_board_rejects_empty_title() {
+        let boards = Arc::new(FakeBoardRepo::new());
+        let users = Arc::new(FakeUserRepo::new());
+        let owner = users.insert("o@e.com", "O");
+        let svc = BoardService::new(boards, users);
+        let err = svc.create_board(owner.id, "   ").await.unwrap_err();
+        assert!(matches!(err, DomainError::InvalidInput(_)));
+    }
+
+    #[tokio::test]
+    async fn viewer_cannot_rename_board() {
+        let f = fixture().await;
+        let err = f
+            .svc
+            .update_board(f.board_id, f.viewer_id, "Hacked")
+            .await
+            .unwrap_err();
+        assert!(matches!(err, DomainError::Forbidden));
+    }
+
+    #[tokio::test]
+    async fn viewer_cannot_add_element() {
+        let f = fixture().await;
+        let err = f
+            .svc
+            .add_element(
+                f.board_id,
+                f.viewer_id,
+                "stroke",
+                serde_json::json!({}),
+                0,
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, DomainError::Forbidden));
+    }
+
+    #[tokio::test]
+    async fn editor_cannot_delete_board() {
+        let f = fixture().await;
+        f.boards
+            .upsert_member(f.board_id, f.viewer_id, BoardRole::Editor)
+            .await
+            .unwrap();
+        let err = f
+            .svc
+            .delete_board(f.board_id, f.viewer_id)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, DomainError::Forbidden));
+    }
+
+    #[tokio::test]
+    async fn owner_can_add_member_by_email() {
+        let f = fixture().await;
+        let bob = f.users.insert("bob@example.com", "Bob");
+        f.svc
+            .add_member_by_email(f.board_id, f.owner_id, "bob@example.com", BoardRole::Editor)
+            .await
+            .unwrap();
+        let role = f
+            .boards
+            .get_member(f.board_id, bob.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .role;
+        assert_eq!(role, BoardRole::Editor);
+    }
+
+    #[tokio::test]
+    async fn cannot_assign_owner_role_via_api() {
+        let f = fixture().await;
+        f.users.insert("bob@example.com", "Bob");
+        let err = f
+            .svc
+            .add_member_by_email(f.board_id, f.owner_id, "bob@example.com", BoardRole::Owner)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, DomainError::InvalidInput(_)));
+    }
+
+    #[tokio::test]
+    async fn viewer_cannot_add_members() {
+        let f = fixture().await;
+        f.users.insert("bob@example.com", "Bob");
+        let err = f
+            .svc
+            .add_member_by_email(f.board_id, f.viewer_id, "bob@example.com", BoardRole::Editor)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, DomainError::Forbidden));
+    }
+
+    #[tokio::test]
+    async fn cannot_change_owner_member_role() {
+        let f = fixture().await;
+        let err = f
+            .svc
+            .set_member_role(f.board_id, f.owner_id, f.owner_id, BoardRole::Editor)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, DomainError::Forbidden));
+    }
+
+    #[tokio::test]
+    async fn owner_can_remove_editor() {
+        let f = fixture().await;
+        f.boards
+            .upsert_member(f.board_id, f.viewer_id, BoardRole::Editor)
+            .await
+            .unwrap();
+        f.svc
+            .remove_member(f.board_id, f.owner_id, f.viewer_id)
+            .await
+            .unwrap();
+        assert!(
+            f.boards
+                .get_member(f.board_id, f.viewer_id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+}

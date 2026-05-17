@@ -31,8 +31,32 @@ mod tests {
     fn viewer_cannot_edit_board() {
         assert!(!BoardRole::Viewer.can_edit_board());
         assert!(BoardRole::Editor.can_edit_board());
+        assert!(BoardRole::Owner.can_edit_board());
+    }
+
+    #[test]
+    fn only_owner_manages_members() {
         assert!(BoardRole::Owner.can_manage_members());
         assert!(!BoardRole::Editor.can_manage_members());
+        assert!(!BoardRole::Viewer.can_manage_members());
+    }
+
+    #[test]
+    fn board_role_deserializes_lowercase() {
+        let editor: BoardRole = serde_json::from_str("\"editor\"").unwrap();
+        let viewer: BoardRole = serde_json::from_str("\"viewer\"").unwrap();
+        let owner: BoardRole = serde_json::from_str("\"owner\"").unwrap();
+        assert_eq!(editor, BoardRole::Editor);
+        assert_eq!(viewer, BoardRole::Viewer);
+        assert_eq!(owner, BoardRole::Owner);
+    }
+
+    #[test]
+    fn board_role_serializes_lowercase() {
+        assert_eq!(
+            serde_json::to_string(&BoardRole::Editor).unwrap(),
+            "\"editor\""
+        );
     }
 }
 

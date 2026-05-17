@@ -177,7 +177,7 @@ input:focus { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.15);
     "toolbar toolbar"
     "notice  notice"
     "canvas  members";
-  grid-template-columns: 1fr 200px;
+  grid-template-columns: 1fr 260px;
   grid-template-rows: auto auto auto 1fr;
   gap: 0;
   min-height: 100vh;
@@ -345,6 +345,91 @@ input:focus { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.15);
   justify-content: space-between;
   gap: 8px;
 }
+
+.member-invite {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.member-invite input {
+  width: 100%;
+}
+
+.member-invite-row {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.member-invite-row select {
+  flex: 1;
+  font-family: inherit;
+  font-size: 0.8rem;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  padding: 5px 8px;
+  background: #fff;
+}
+
+.member-error {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+}
+
+.member-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.member-row {
+  flex-direction: column;
+  align-items: stretch !important;
+  gap: 0.35rem !important;
+  padding: 0.5rem 0 !important;
+}
+
+.member-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.member-email {
+  font-size: 0.7rem;
+  color: #71717a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.member-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.role-select {
+  flex: 1;
+  font-family: inherit;
+  font-size: 0.75rem;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  padding: 4px 6px;
+  background: #fff;
+}
+
+.btn-primary {
+  color: #fff;
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
 .member-name { font-size: 0.875rem; color: #18181b; }
 .role-badge {
   font-size: 0.7rem;
