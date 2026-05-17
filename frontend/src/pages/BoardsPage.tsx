@@ -9,8 +9,15 @@ export function BoardsPage() {
   const qc = useQueryClient()
   const { setToken } = useAuth()
   const [title, setTitle] = useState('')
+  const [createErr, setCreateErr] = useState<string | null>(null)
+  const [deleteErr, setDeleteErr] = useState<string | null>(null)
 
-  const { data: boards, error } = useQuery({
+  const { data: me } = useQuery({
+    queryKey: ['me'],
+    queryFn: () => api<{ id: string }>('/api/me'),
+  })
+
+  const { data: boards, error, isLoading } = useQuery({
     queryKey: ['boards'],
     queryFn: () => api<Board[]>('/api/boards'),
   })
@@ -18,14 +25,44 @@ export function BoardsPage() {
   const create = useMutation({
     mutationFn: (t: string) =>
       api<Board>('/api/boards', { method: 'POST', body: JSON.stringify({ title: t }) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['boards'] }),
+    onSuccess: () => {
+      setCreateErr(null)
+      qc.invalidateQueries({ queryKey: ['boards'] })
+    },
   })
 
-  function onCreate(e: FormEvent) {
+  const remove = useMutation({
+    mutationFn: (id: string) => api<void>(`/api/boards/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      setDeleteErr(null)
+      qc.invalidateQueries({ queryKey: ['boards'] })
+    },
+  })
+
+  async function onCreate(e: FormEvent) {
     e.preventDefault()
-    if (!title.trim()) return
-    create.mutate(title.trim())
-    setTitle('')
+    const t = title.trim()
+    if (!t) {
+      setCreateErr('Введите название доски')
+      return
+    }
+    setCreateErr(null)
+    try {
+      await create.mutateAsync(t)
+      setTitle('')
+    } catch (err) {
+      setCreateErr(err instanceof Error ? err.message : 'Не удалось создать доску')
+    }
+  }
+
+  async function onDelete(board: Board) {
+    if (!window.confirm(`Удалить доску «${board.title}»?`)) return
+    setDeleteErr(null)
+    try {
+      await remove.mutateAsync(board.id)
+    } catch (err) {
+      setDeleteErr(err instanceof Error ? err.message : 'Не удалось удалить доску')
+    }
   }
 
   return (
@@ -42,18 +79,42 @@ export function BoardsPage() {
           placeholder="Название новой доски"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+          required
+          minLength={1}
+          disabled={create.isPending}
         />
         <button type="submit" disabled={create.isPending}>
-          Создать
+          {create.isPending ? 'Создание…' : 'Создать'}
         </button>
       </form>
+      {createErr && <p className="error">{createErr}</p>}
+      {deleteErr && <p className="error">{deleteErr}</p>}
+      {isLoading && <p>Загрузка…</p>}
       <ul className="board-list">
-        {boards?.map((b) => (
-          <li key={b.id}>
-            <Link to={`/boards/${b.id}`}>{b.title}</Link>
-          </li>
-        ))}
+        {boards?.map((b) => {
+          const isOwner = me?.id === b.owner_id
+          return (
+            <li key={b.id} className="board-list-item">
+              <Link to={`/boards/${b.id}`} className="board-list-title">
+                {b.title}
+              </Link>
+              {isOwner && (
+                <button
+                  type="button"
+                  className="btn-danger btn-sm"
+                  disabled={remove.isPending}
+                  onClick={() => onDelete(b)}
+                >
+                  Удалить
+                </button>
+              )}
+            </li>
+          )
+        })}
       </ul>
+      {!isLoading && boards?.length === 0 && (
+        <p className="muted">Пока нет досок — создайте первую выше.</p>
+      )}
     </div>
   )
 }

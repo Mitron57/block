@@ -1,6 +1,6 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, getToken } from '../api'
 import { hitTestElement } from '../boardHitTest'
 import type { BoardElement, BoardRole, Member, ServerWsMessage } from '../types'
@@ -81,6 +81,7 @@ function relPos(e: React.PointerEvent<HTMLCanvasElement>, c: HTMLCanvasElement):
 export function BoardPage() {
   const { id } = useParams<{ id: string }>()
   const boardId = id!
+  const nav = useNavigate()
   const qc = useQueryClient()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wsRef = useRef<WebSocket | null>(null)
@@ -101,7 +102,7 @@ export function BoardPage() {
 
   const { data: board } = useQuery({
     queryKey: ['board', boardId],
-    queryFn: () => api<{ id: string; title: string }>(`/api/boards/${boardId}`),
+    queryFn: () => api<{ id: string; title: string; owner_id: string }>(`/api/boards/${boardId}`),
   })
 
   const { data: me } = useQuery({
@@ -120,6 +121,25 @@ export function BoardPage() {
   }, [me, members])
 
   const canEdit = role === 'owner' || role === 'editor'
+  const isOwner = role === 'owner'
+
+  const deleteBoard = useMutation({
+    mutationFn: () => api<void>(`/api/boards/${boardId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['boards'] })
+      nav('/boards')
+    },
+  })
+
+  async function onDeleteBoard() {
+    if (!board || !isOwner) return
+    if (!window.confirm(`Удалить доску «${board.title}»?`)) return
+    try {
+      await deleteBoard.mutateAsync()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Не удалось удалить доску')
+    }
+  }
 
   useEffect(() => {
     const token = getToken()
@@ -351,6 +371,16 @@ export function BoardPage() {
         <span className="ws-badge" style={{ background: wsColor }}>
           {wsState === 'open' ? 'онлайн' : wsState === 'connecting' ? 'подключение…' : 'офлайн'}
         </span>
+        {isOwner && (
+          <button
+            type="button"
+            className="btn-danger btn-sm"
+            disabled={deleteBoard.isPending}
+            onClick={onDeleteBoard}
+          >
+            Удалить доску
+          </button>
+        )}
       </header>
 
       {canEdit && (

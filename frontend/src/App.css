@@ -116,6 +116,39 @@ input:focus { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.15);
   font-size: 0.95rem;
 }
 
+.board-list-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.board-list-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.btn-danger {
+  color: #b91c1c;
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #ffe4e6;
+}
+
+.muted {
+  color: #71717a;
+  font-size: 0.875rem;
+  margin: 0.5rem 0 0;
+}
+
 .error { color: #b91c1c; font-size: 0.875rem; margin: 0.5rem 0; }
 .linkish {
   background: none;
