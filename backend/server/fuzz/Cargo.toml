@@ -34,3 +34,9 @@ bench = false
 
 [workspace]
 members = ["."]
+
+# cargo-fuzz по умолчанию собирает с --release, но можно явно усилить оптимизацию
+[profile.release]
+opt-level     = 3
+lto           = "thin"   # thin-LTO — хороший баланс скорости сборки и качества кода
+codegen-units = 1
